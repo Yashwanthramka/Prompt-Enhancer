@@ -73,10 +73,6 @@ If you’d like to record sign-in/out and session-restore events, create `auth_e
 - `server/` — Minimal Express bridge to OpenRouter (SSE passthrough)
 - `public/` — Static assets (includes official React and Vite logos)
 
-## Credits
-- React and Vite logos from the official Vite template
-- Supabase wordmark from the Supabase brand assets repository
-- OpenRouter icon from openrouter.ai site assets
 =======
 # Prompt-Enhancer
 A basic Prompt enhancher using free LLMs provided by Openrouter made with React and managed users using supabase
