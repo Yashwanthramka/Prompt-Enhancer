@@ -67,7 +67,9 @@ app.put('/api/admin/rulesets/:id', adminGuard, (req, res) => {
 
 app.post('/api/complete', async (req, res) => {
   const { providerModel, rulesetId = 'enhancer-default', messages = [], stream = true } = req.body || {}
-  const key = process.env.OPENROUTER_API_KEY
+  // Allow per-user override via header (not stored) or fallback to env
+  const overrideKey = req.headers['x-openrouter-key']
+  const key = (typeof overrideKey === 'string' && overrideKey.trim()) || process.env.OPENROUTER_API_KEY
   const referer = process.env.APP_URL || 'http://localhost:5173'
 
   // Prep system rules

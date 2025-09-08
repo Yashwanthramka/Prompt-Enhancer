@@ -608,3 +608,10 @@ html,body{background:var(--bg); color:var(--text); transition:background-color .
 .form-actions { display:flex; align-items:center; gap:8px; margin-top: 6px; }
 .hint { opacity: .7; font-size: .9rem; }
 .error-text { color: #b00020; }
+.settings-form input[type="password"], .settings-form input[type="text"], .settings-form select, .settings-form textarea {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--muted-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}

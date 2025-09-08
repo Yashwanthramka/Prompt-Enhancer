@@ -40,6 +40,10 @@ export default function Settings() {
   const [supabaseUrl, setSupabaseUrl] = useState('')
   const [supabaseAnon, setSupabaseAnon] = useState('')
   const [envMessage, setEnvMessage] = useState('')
+  const [useMine, setUseMine] = useState(() => localStorage.getItem('or_use_mine') === '1')
+  const [mineMasked, setMineMasked] = useState(() => {
+    try { const v = localStorage.getItem('or_key') || ''; return v ? `${'*'.repeat(Math.max(0, v.length-6))}${v.slice(-6)}` : '' } catch { return '' }
+  })
 
   useEffect(() => {
     (async () => {
@@ -116,6 +120,27 @@ export default function Settings() {
               <div className="error-text">{envError}</div>
             ) : (
               <div className="settings-form">
+                <div className="form-row">
+                  <label>Use my OpenRouter key (per browser)</label>
+                  <div>
+                    <input type="checkbox" id="use-mine" checked={useMine} onChange={(e)=>{ setUseMine(e.target.checked); try { localStorage.setItem('or_use_mine', e.target.checked ? '1' : '0') } catch {} }} />
+                    <label htmlFor="use-mine" style={{ marginLeft: 8 }}>Prefer my key over the organization key</label>
+                  </div>
+                </div>
+                <div className="form-row">
+                  <label>My OpenRouter Key (stored in this browser)</label>
+                  <input
+                    className="c-ask-input"
+                    type="password"
+                    placeholder={mineMasked ? `Current: ${mineMasked}` : 'sk-or-...'}
+                    value={orKey}
+                    onChange={e => setOrKey(e.target.value)}
+                  />
+                  <div className="form-actions">
+                    <button className="sp-logout" onClick={()=>{ try { if(orKey){ localStorage.setItem('or_key', orKey); setMineMasked(`${'*'.repeat(Math.max(0, orKey.length-6))}${orKey.slice(-6)}`); setOrKey(''); setEnvMessage('Saved my key locally.'); } } catch(e){ setEnvMessage(String(e)) } }}>Save My Key</button>
+                    {mineMasked && <button className="sp-settings" onClick={()=>{ try{ localStorage.removeItem('or_key'); setMineMasked(''); setEnvMessage('Removed my key from this browser.')} catch(e){ setEnvMessage(String(e)) } }}>Remove</button>}
+                  </div>
+                </div>
                 <div className="form-row">
                   <label>OpenRouter API Key</label>
                   <input
