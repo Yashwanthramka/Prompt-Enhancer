@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 <div align="center">
   <h1>Prompt Enhancer</h1>
   <p>Enhance prompts using free LLMs via OpenRouter — with Supabase auth.</p>
