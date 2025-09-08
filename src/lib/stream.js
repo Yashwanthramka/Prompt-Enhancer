@@ -1,6 +1,6 @@
 // Streaming client util for /api/complete
 
-export async function streamCompletion({ providerModel, rulesetId, messages, onToken, signal }) {
+export async function streamCompletion({ providerModel, rulesetId, rulesContent, messages, onToken, signal }) {
   // Optional per-user BYO OpenRouter key stored in localStorage
   let headers = { 'Content-Type': 'application/json' }
   try {
@@ -12,7 +12,7 @@ export async function streamCompletion({ providerModel, rulesetId, messages, onT
   const res = await fetch('/api/complete', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ providerModel, rulesetId, messages, stream: true }),
+    body: JSON.stringify({ providerModel, rulesetId, rulesContent, messages, stream: true }),
     signal,
   })
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
