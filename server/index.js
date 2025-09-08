@@ -44,14 +44,14 @@ app.get('/api/rulesets', (_req, res) => {
 })
 
 // --- Admin: rulesets read/write (dev convenience) ---
-app.get('/api/admin/rulesets/:id', (req, res) => {
+app.get('/api/admin/rulesets/:id', adminGuard, (req, res) => {
   const { id } = req.params || {}
   const data = readRuleset(id)
   if (!data) return res.status(404).json({ error: 'Not found' })
   res.json({ id, content: data })
 })
 
-app.put('/api/admin/rulesets/:id', (req, res) => {
+app.put('/api/admin/rulesets/:id', adminGuard, (req, res) => {
   const { id } = req.params || {}
   const { content } = req.body || {}
   if (!id || typeof content !== 'object') return res.status(400).json({ error: 'Invalid payload' })
@@ -184,7 +184,7 @@ const serializeEnv = (entries, originalTxt) => {
   return out.filter(l => l !== undefined).join('\n')
 }
 
-app.get('/api/admin/env', (_req, res) => {
+app.get('/api/admin/env', adminGuard, (_req, res) => {
   try {
     const txt = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : ''
     const map = parseEnv(txt)
@@ -200,7 +200,7 @@ app.get('/api/admin/env', (_req, res) => {
   }
 })
 
-app.put('/api/admin/env', (req, res) => {
+app.put('/api/admin/env', adminGuard, (req, res) => {
   try {
     const updates = req.body?.updates || {}
     const txt = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : ''
@@ -222,3 +222,12 @@ app.put('/api/admin/env', (req, res) => {
 
 const PORT = process.env.PORT || 8787
 app.listen(PORT, () => console.log(`MCP bridge listening on http://localhost:${PORT}`))
+// simple origin guard for admin routes (dev-only)
+const adminGuard = (req, res, next) => {
+  const allowed = (process.env.APP_URL || 'http://localhost:5173')
+  const origin = req.headers.origin || req.headers['x-forwarded-origin'] || ''
+  if (origin && !origin.startsWith(allowed)) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  next()
+}
