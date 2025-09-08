@@ -17,7 +17,7 @@
     </a>
     &nbsp;
     <a href="https://openrouter.ai" target="_blank" rel="noreferrer">
-      <img alt="OpenRouter" src="https://openrouter.ai/android-chrome-192x192.png" height="42" />
+      <img alt="OpenRouter" src="public/openrouter.svg" height="42" />
     </a>
   </p>
 
