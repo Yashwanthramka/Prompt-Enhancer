@@ -1,8 +1,7 @@
 <div align="center">
   <h1>Prompt Enhancer</h1>
-  <p>Enhance prompts using free LLMs via OpenRouter — with Supabase auth.</p>
+  <p>Enhance prompts using free LLMs via OpenRouter, with Supabase auth.</p>
 
-  <!-- Tech logos (official sources or local) -->
   <p>
     <a href="https://react.dev" target="_blank" rel="noreferrer">
       <img alt="React" src="public/react.svg" height="48" />
@@ -21,7 +20,6 @@
     </a>
   </p>
 
-  <!-- Badges -->
   <p>
     <a href="https://nodejs.org/"><img alt="Node >= 18" src="https://img.shields.io/badge/node-%3E%3D18-43853d?logo=node.js&logoColor=white"></a>
     <a href="https://vitejs.dev/"><img alt="Vite" src="https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white"></a>
@@ -32,11 +30,11 @@
 </div>
 
 ## Features
-- Supabase OAuth (Microsoft/Azure) with persisted sessions and auto-redirect to the app when a session exists
+- Supabase OAuth (Microsoft/Azure) with persisted sessions and auto-redirect when a session exists
 - Model selector (DeepSeek v3.1, GPT-OSS 120B, Qwen3 Coder)
 - Streaming completions via a minimal Express bridge to OpenRouter
 - Conversation history, copy output, delete conversation
-- Client-side audit logging to `auth_events` table (optional)
+- Optional client-side audit logging to `auth_events`
 
 ## Quickstart
 1) Install deps
@@ -54,7 +52,7 @@
 Open http://localhost:5173 and sign in with your Microsoft account. If a local session exists, the app auto-redirects to `/app`.
 
 ## OpenRouter models
-The UI selects a model; the server forwards it directly to `https://openrouter.ai/api/v1/chat/completions`.
+The UI selects a model; the server forwards it to `https://openrouter.ai/api/v1/chat/completions`.
 
 Default options (configurable in code):
 - `deepseek/deepseek-chat-v3.1:free`
@@ -62,7 +60,12 @@ Default options (configurable in code):
 - `qwen/qwen3-coder:free`
 
 ## Optional: auth audit table
-If you’d like to record sign-in/out and session-restore events, create `auth_events` in Supabase. SQL template is documented in `src/lib/audit.js`.
+If you’d like to record sign-in/out and session-restore events, see `src/lib/audit.js` for the SQL template.
+
+## Docs
+- Settings API: `docs/SETTINGS_API.md`
+- MCP Tools Catalog: `docs/MCP_TOOLS.md`
+- Supabase schema for settings: `supabase/settings.sql`
 
 ## Build
 `npm run build` then serve `/dist` behind the same origin as the server (so the app can call `/api/*`).
@@ -71,8 +74,11 @@ If you’d like to record sign-in/out and session-restore events, create `auth_e
 - `src/` — React app (Enhancer UI, model selector)
 - `server/` — Minimal Express bridge to OpenRouter (SSE passthrough)
 - `public/` — Static assets (includes official React and Vite logos)
+- `docs/` — Architecture docs (Settings API, MCP tools)
+-, `supabase/` — SQL schema for settings
 
-=======
-# Prompt-Enhancer
-A basic Prompt enhancher using free LLMs provided by Openrouter made with React and managed users using supabase
->>>>>>> origin/main
+## Credits
+- React and Vite logos from the official Vite template
+- Supabase wordmark from Supabase brand assets
+- OpenRouter icon included as `public/openrouter.svg`
+
