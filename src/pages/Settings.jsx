@@ -195,6 +195,8 @@ function RulesetEditor() {
   const [id, setId] = useState('')
   const [text, setText] = useState('')
   const [msg, setMsg] = useState('')
+  const [newId, setNewId] = useState('')
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     fetch('/api/rulesets').then(r => r.json()).then(d => setList(d.rulesets || []))
@@ -215,10 +217,32 @@ function RulesetEditor() {
     } catch (e) { setMsg(`Failed: ${e}`) }
   }
 
+  const createNew = async () => {
+    try {
+      setCreating(true); setMsg('')
+      const base = { system: 'You are a helpful assistant. Keep responses concise and helpful.' }
+      const res = await fetch('/api/admin/rulesets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: newId.trim(), content: base }) })
+      const ok = await res.json()
+      if (!res.ok) throw new Error(ok?.error || `HTTP ${res.status}`)
+      setList(ls => [...new Set([...ls, newId.trim()])])
+      setId(newId.trim())
+      setText(JSON.stringify(base, null, 2))
+      setNewId('')
+      setMsg('Created')
+    } catch (e) { setMsg(`Failed: ${e}`) } finally { setCreating(false) }
+  }
+
   return (
     <section className="settings-card">
       <h2 className="settings-title">Rulesets</h2>
       <div className="settings-body">
+        <div className="form-row">
+          <label>Create new ruleset</label>
+          <div className="form-actions">
+            <input className="c-ask-input" placeholder="my-ruleset" value={newId} onChange={e => setNewId(e.target.value)} style={{ maxWidth: 240 }} />
+            <button className="sp-logout" disabled={!newId || creating} onClick={createNew}>Create</button>
+          </div>
+        </div>
         <div className="form-row">
           <label>Pick ruleset</label>
           <select className="c-ask-input" value={id} onChange={e => setId(e.target.value)}>

@@ -29,6 +29,8 @@ export default function Enhancer() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [model, setModel] = useState('deepseek/deepseek-chat-v3.1:free')
+  const [rulesets, setRulesets] = useState([])
+  const [rulesetId, setRulesetId] = useState(() => localStorage.getItem('rulesetId') || 'enhancer-default')
   const mainRef = useRef(null)
   const listRef = useRef(null)
   const bottomRef = useRef(null)
@@ -93,6 +95,10 @@ export default function Enhancer() {
     })
     return () => data?.subscription?.unsubscribe?.()
   }, [])
+
+  // Load available rulesets and persist selection
+  useEffect(() => { fetch('/api/rulesets').then(r => r.json()).then(d => setRulesets(d.rulesets || [])) }, [])
+  useEffect(() => { try { localStorage.setItem('rulesetId', rulesetId) } catch {} }, [rulesetId])
 
   // If we land on /app with no session, bounce to home
   useEffect(() => {
@@ -284,7 +290,7 @@ export default function Enhancer() {
     try {
       await streamCompletion({
         providerModel: model,
-        rulesetId: 'enhancer-default',
+        rulesetId,
         messages: userMessages,
         onToken: (tok) => {
           accum += tok
@@ -416,7 +422,7 @@ export default function Enhancer() {
           </div>
 
           {/* Bottom input dock (ChatGPT-style) */}
-          <div className="c-input-dock" role="region" aria-label="Prompt input">
+          <div className="c-input-dock" role="region" aria-label="Prompt input">\n            <div className="rs-pick" style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 6 }}>\n              <label htmlFor="rs-select" style={{ alignSelf: 'center', opacity: .8 }}>Ruleset</label>\n              <select id="rs-select" className="c-ask-input" value={rulesetId} onChange={e => setRulesetId(e.target.value)} style={{ maxWidth: 320 }}>\n                {rulesets.length === 0 && <option value={rulesetId}>{rulesetId}</option>}\n                {rulesets.map(r => <option key={r} value={r}>{r}</option>)}\n              </select>\n            </div>
             <ProviderBar
               value={model}
               onChange={setModel}
@@ -447,3 +453,4 @@ export default function Enhancer() {
     </>
   )
 }
+

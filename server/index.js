@@ -65,6 +65,24 @@ app.put('/api/admin/rulesets/:id', adminGuard, (req, res) => {
   }
 })
 
+// Create a new ruleset file
+app.post('/api/admin/rulesets', adminGuard, (req, res) => {
+  try {
+    const { id, content } = req.body || {}
+    if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,40}$/.test(id)) {
+      return res.status(400).json({ error: 'Invalid id. Use letters, numbers, _ or - (max 40).' })
+    }
+    const json = (typeof content === 'object' && content) || { system: 'You are a helpful assistant.' }
+    if (!fs.existsSync(rulesetDir)) fs.mkdirSync(rulesetDir, { recursive: true })
+    const p = path.join(rulesetDir, `${id}.json`)
+    if (fs.existsSync(p)) return res.status(409).json({ error: 'Exists' })
+    fs.writeFileSync(p, JSON.stringify(json, null, 2), 'utf8')
+    res.status(201).json({ ok: true, id })
+  } catch (e) {
+    res.status(500).json({ error: String(e) })
+  }
+})
+
 app.post('/api/complete', async (req, res) => {
   const { providerModel, rulesetId = 'enhancer-default', messages = [], stream = true } = req.body || {}
   // Allow per-user override via header (not stored) or fallback to env
