@@ -31,6 +31,56 @@ export default function Settings() {
 
   const backToApp = () => { window.location.href = '/app' }
 
+  // --- API Access: .env editor ---
+  const [envLoading, setEnvLoading] = useState(true)
+  const [envError, setEnvError] = useState('')
+  const [orKey, setOrKey] = useState('')
+  const [orMasked, setOrMasked] = useState('')
+  const [appUrl, setAppUrl] = useState('')
+  const [supabaseUrl, setSupabaseUrl] = useState('')
+  const [supabaseAnon, setSupabaseAnon] = useState('')
+  const [envMessage, setEnvMessage] = useState('')
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setEnvLoading(true)
+        const res = await fetch('/api/admin/env')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        setOrMasked(data?.values?.OPENROUTER_API_KEY?.masked || '')
+        setAppUrl(data?.values?.APP_URL?.value || '')
+        setSupabaseUrl(data?.values?.VITE_SUPABASE_URL?.value || '')
+        setSupabaseAnon(data?.values?.VITE_SUPABASE_ANON_KEY?.value || '')
+        setEnvError('')
+      } catch (e) {
+        setEnvError(String(e))
+      } finally { setEnvLoading(false) }
+    })()
+  }, [])
+
+  const saveEnv = async () => {
+    try {
+      setEnvMessage('')
+      const updates = {}
+      if (orKey) updates.OPENROUTER_API_KEY = orKey.trim()
+      updates.APP_URL = appUrl.trim()
+      updates.VITE_SUPABASE_URL = supabaseUrl.trim()
+      updates.VITE_SUPABASE_ANON_KEY = supabaseAnon.trim()
+      const res = await fetch('/api/admin/env', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates }) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setOrKey('')
+      setEnvMessage(data.requiresRebuild ? 'Saved. Rebuild required for VITE_* changes.' : 'Saved.')
+      // refresh masked
+      const re = await fetch('/api/admin/env')
+      const d2 = await re.json()
+      setOrMasked(d2?.values?.OPENROUTER_API_KEY?.masked || '')
+    } catch (e) {
+      setEnvMessage(`Failed: ${e}`)
+    }
+  }
+
   return (
     <>
       <header className="topbar">
@@ -60,7 +110,41 @@ export default function Settings() {
         <section className="settings-card">
           <h2 className="settings-title">API Access</h2>
           <div className="settings-body">
-            <p>Configure provider keys (BYO or organization) and model access. (Coming soon)</p>
+            {envLoading ? (
+              <div>Loading…</div>
+            ) : envError ? (
+              <div className="error-text">{envError}</div>
+            ) : (
+              <div className="settings-form">
+                <div className="form-row">
+                  <label>OpenRouter API Key</label>
+                  <input
+                    className="c-ask-input"
+                    type="password"
+                    placeholder={orMasked ? `Current: ${orMasked}` : 'sk-or-...' }
+                    value={orKey}
+                    onChange={e => setOrKey(e.target.value)}
+                  />
+                </div>
+                <div className="form-row">
+                  <label>App URL (HTTP-Referer)</label>
+                  <input className="c-ask-input" value={appUrl} onChange={e => setAppUrl(e.target.value)} placeholder="http://localhost:5173" />
+                </div>
+                <div className="form-row">
+                  <label>Supabase URL (VITE_*)</label>
+                  <input className="c-ask-input" value={supabaseUrl} onChange={e => setSupabaseUrl(e.target.value)} />
+                </div>
+                <div className="form-row">
+                  <label>Supabase Anon Key (VITE_*)</label>
+                  <input className="c-ask-input" type="password" value={supabaseAnon} onChange={e => setSupabaseAnon(e.target.value)} />
+                </div>
+                <div className="hint">Note: Changing VITE_* requires rebuilding the client to take effect.</div>
+                <div className="form-actions">
+                  <button className="sp-logout" onClick={saveEnv}>Save</button>
+                  {envMessage && <span className="hint" style={{ marginLeft: 10 }}>{envMessage}</span>}
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
@@ -71,12 +155,7 @@ export default function Settings() {
           </div>
         </section>
 
-        <section className="settings-card">
-          <h2 className="settings-title">Rulesets</h2>
-          <div className="settings-body">
-            <p>Manage personal rulesets and set defaults. (Coming soon)</p>
-          </div>
-        </section>
+        <RulesetEditor />
 
         <section className="settings-card">
           <h2 className="settings-title">Usage & Audit</h2>
@@ -89,3 +168,52 @@ export default function Settings() {
   )
 }
 
+function RulesetEditor() {
+  const [list, setList] = useState([])
+  const [id, setId] = useState('')
+  const [text, setText] = useState('')
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    fetch('/api/rulesets').then(r => r.json()).then(d => setList(d.rulesets || []))
+  }, [])
+
+  useEffect(() => {
+    if (!id) return setText('')
+    fetch(`/api/admin/rulesets/${encodeURIComponent(id)}`).then(r => r.json()).then(d => setText(JSON.stringify(d.content || {}, null, 2)))
+  }, [id])
+
+  const save = async () => {
+    try {
+      setMsg('')
+      const json = JSON.parse(text)
+      const res = await fetch(`/api/admin/rulesets/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: json }) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setMsg('Saved')
+    } catch (e) { setMsg(`Failed: ${e}`) }
+  }
+
+  return (
+    <section className="settings-card">
+      <h2 className="settings-title">Rulesets</h2>
+      <div className="settings-body">
+        <div className="form-row">
+          <label>Pick ruleset</label>
+          <select className="c-ask-input" value={id} onChange={e => setId(e.target.value)}>
+            <option value="">Select…</option>
+            {list.map(x => <option key={x} value={x}>{x}</option>)}
+          </select>
+        </div>
+        {id && (
+          <>
+            <textarea className="c-ask-input" style={{ minHeight: 220, width: '100%' }} value={text} onChange={e => setText(e.target.value)} />
+            <div className="form-actions">
+              <button className="sp-logout" onClick={save}>Save ruleset</button>
+              {msg && <span className="hint" style={{ marginLeft: 10 }}>{msg}</span>}
+            </div>
+          </>
+        )}
+      </div>
+    </section>
+  )
+}

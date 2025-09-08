@@ -595,3 +595,16 @@ html,body{background:var(--bg); color:var(--text); transition:background-color .
 }
 .pb-pill:hover { background: var(--btn-bg-hover); }
 .pb-pill.is-active { background: var(--card); box-shadow: 0 0 0 2px var(--accent) inset; border-color: var(--muted-border-strong); }
+
+/* ===== Settings page ===== */
+.settings-page { max-width: 820px; margin: 80px auto 40px; padding: 0 16px; }
+.settings-header { display:flex; justify-content:center; margin-bottom: 16px; }
+.settings-card { background: var(--card); border: 1px solid var(--muted-border); border-radius: 12px; margin: 16px 0; padding: 16px; box-shadow: 0 2px 8px var(--shadow); }
+.settings-title { text-align: center; margin: 8px 0 16px; }
+.settings-body { max-width: 760px; margin: 0 auto; }
+.settings-form { display: grid; gap: 12px; }
+.form-row { display:grid; gap:6px; }
+.form-row label { font-size: .9rem; opacity: .85; }
+.form-actions { display:flex; align-items:center; gap:8px; margin-top: 6px; }
+.hint { opacity: .7; font-size: .9rem; }
+.error-text { color: #b00020; }

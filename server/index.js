@@ -43,6 +43,28 @@ app.get('/api/rulesets', (_req, res) => {
   res.json({ rulesets: list })
 })
 
+// --- Admin: rulesets read/write (dev convenience) ---
+app.get('/api/admin/rulesets/:id', (req, res) => {
+  const { id } = req.params || {}
+  const data = readRuleset(id)
+  if (!data) return res.status(404).json({ error: 'Not found' })
+  res.json({ id, content: data })
+})
+
+app.put('/api/admin/rulesets/:id', (req, res) => {
+  const { id } = req.params || {}
+  const { content } = req.body || {}
+  if (!id || typeof content !== 'object') return res.status(400).json({ error: 'Invalid payload' })
+  try {
+    const p = path.join(rulesetDir, `${id}.json`)
+    if (!fs.existsSync(rulesetDir)) fs.mkdirSync(rulesetDir, { recursive: true })
+    fs.writeFileSync(p, JSON.stringify(content, null, 2), 'utf8')
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: String(e) })
+  }
+})
+
 app.post('/api/complete', async (req, res) => {
   const { providerModel, rulesetId = 'enhancer-default', messages = [], stream = true } = req.body || {}
   const key = process.env.OPENROUTER_API_KEY
@@ -127,6 +149,76 @@ app.post('/api/complete', async (req, res) => {
 })
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
+
+// --- Admin: .env editor (limited keys) ---
+const envPath = path.resolve(__dirname, '..', '.env')
+const allowedEnvKeys = new Set(['OPENROUTER_API_KEY', 'APP_URL', 'VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'])
+
+const parseEnv = (txt) => {
+  const map = new Map()
+  for (const line of (txt || '').split(/\r?\n/)) {
+    if (!line || /^\s*#/.test(line)) continue
+    const idx = line.indexOf('=')
+    if (idx === -1) continue
+    const key = line.slice(0, idx).trim()
+    let val = line.slice(idx + 1)
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) val = val.slice(1, -1)
+    map.set(key, val)
+  }
+  return map
+}
+
+const serializeEnv = (entries, originalTxt) => {
+  // preserve unknown lines; replace or append known keys
+  const lines = (originalTxt || '').split(/\r?\n/)
+  const known = new Set([...entries.keys()])
+  const out = lines.map((line) => {
+    if (!line || /^\s*#/.test(line) || line.indexOf('=') === -1) return line
+    const key = line.slice(0, line.indexOf('=')).trim()
+    if (!known.has(key)) return line
+    const val = entries.get(key) ?? ''
+    known.delete(key)
+    return `${key}=${val}`
+  })
+  for (const key of known) out.push(`${key}=${entries.get(key) ?? ''}`)
+  return out.filter(l => l !== undefined).join('\n')
+}
+
+app.get('/api/admin/env', (_req, res) => {
+  try {
+    const txt = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : ''
+    const map = parseEnv(txt)
+    const mask = (v) => (v ? `${'*'.repeat(Math.max(0, v.length - 6))}${v.slice(-6)}` : '')
+    const values = {}
+    for (const k of allowedEnvKeys) {
+      const v = map.get(k) || ''
+      values[k] = k === 'OPENROUTER_API_KEY' ? { has: !!v, masked: mask(v) } : { value: v }
+    }
+    res.json({ values, path: envPath, note: 'Editing VITE_* requires rebuild to take effect in the client.' })
+  } catch (e) {
+    res.status(500).json({ error: String(e) })
+  }
+})
+
+app.put('/api/admin/env', (req, res) => {
+  try {
+    const updates = req.body?.updates || {}
+    const txt = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : ''
+    const map = parseEnv(txt)
+    for (const [k, v] of Object.entries(updates)) {
+      if (!allowedEnvKeys.has(k)) continue
+      if (typeof v !== 'string') continue
+      map.set(k, v)
+      process.env[k] = v // apply for server runtime keys
+    }
+    const newTxt = serializeEnv(map, txt)
+    fs.writeFileSync(envPath, newTxt, 'utf8')
+    const requiresRebuild = Object.keys(updates).some(k => k.startsWith('VITE_'))
+    res.json({ ok: true, requiresRebuild })
+  } catch (e) {
+    res.status(500).json({ error: String(e) })
+  }
+})
 
 const PORT = process.env.PORT || 8787
 app.listen(PORT, () => console.log(`MCP bridge listening on http://localhost:${PORT}`))
