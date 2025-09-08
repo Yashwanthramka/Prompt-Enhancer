@@ -581,8 +581,9 @@ html,body{background:var(--bg); color:var(--text); transition:background-color .
 .sp-empty { opacity: .7; padding: 8px 10px; }
 .sp-footer { position: sticky; bottom: 12px; padding: 10px 12px; }
 .sp-user { border: 1px solid var(--muted-border); border-radius: 12px; background: var(--card); padding: 10px; }
-.sp-logout { margin-top: 8px; padding: 6px 8px; border: 1px solid var(--muted-border); background: var(--btn-bg); color: var(--text); border-radius: 10px; cursor: pointer; }
-.sp-logout:hover { background: var(--btn-bg-hover); }
+.sp-actions { display:flex; gap:8px; margin-top:8px; }
+.sp-logout, .sp-settings { padding: 6px 8px; border: 1px solid var(--muted-border); background: var(--btn-bg); color: var(--text); border-radius: 10px; cursor: pointer; }
+.sp-logout:hover, .sp-settings:hover { background: var(--btn-bg-hover); }
 
 /* Provider bar (model selector) */
 .pb-bar { display:flex; gap:8px; justify-content:center; padding:6px 0 10px; flex-wrap:wrap; }

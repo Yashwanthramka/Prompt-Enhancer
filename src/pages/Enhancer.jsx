@@ -374,7 +374,14 @@ export default function Enhancer() {
 
           <div className="sp-footer">
             <div className="sp-user">{user?.user_metadata?.name || user?.email || 'Guest'}</div>
-            {user && <button className="sp-logout" onClick={signOut}>Log out</button>}
+            <div className="sp-actions">
+              {user && (
+                <>
+                  <button className="sp-settings" onClick={() => (window.location.href = '/settings')}>Settings</button>
+                  <button className="sp-logout" onClick={signOut}>Log out</button>
+                </>
+              )}
+            </div>
           </div>
         </aside>
 
