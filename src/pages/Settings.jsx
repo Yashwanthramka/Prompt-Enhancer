@@ -34,13 +34,14 @@ export default function Settings() {
   // --- API Access: .env editor ---
   const [envLoading, setEnvLoading] = useState(true)
   const [envError, setEnvError] = useState('')
-  const [orKey, setOrKey] = useState('')
+  const [orKey, setOrKey] = useState('') // organization .env key editor (optional)
   const [orMasked, setOrMasked] = useState('')
   const [appUrl, setAppUrl] = useState('')
   const [supabaseUrl, setSupabaseUrl] = useState('')
   const [supabaseAnon, setSupabaseAnon] = useState('')
   const [envMessage, setEnvMessage] = useState('')
   const [useMine, setUseMine] = useState(() => localStorage.getItem('or_use_mine') === '1')
+  const [myOrKey, setMyOrKey] = useState('')
   const [mineMasked, setMineMasked] = useState(() => {
     try { const v = localStorage.getItem('or_key') || ''; return v ? `${'*'.repeat(Math.max(0, v.length-6))}${v.slice(-6)}` : '' } catch { return '' }
   })
@@ -114,12 +115,9 @@ export default function Settings() {
         <section className="settings-card">
           <h2 className="settings-title">API Access</h2>
           <div className="settings-body">
-            {envLoading ? (
-              <div>Loading…</div>
-            ) : envError ? (
-              <div className="error-text">{envError}</div>
-            ) : (
-              <div className="settings-form">
+            <div className="settings-form">
+                {envLoading && <div className="hint">Loading current values…</div>}
+                {envError && <div className="error-text">{envError}</div>}
                 <div className="form-row">
                   <label>Use my OpenRouter key (per browser)</label>
                   <div>
@@ -133,11 +131,11 @@ export default function Settings() {
                     className="c-ask-input"
                     type="password"
                     placeholder={mineMasked ? `Current: ${mineMasked}` : 'sk-or-...'}
-                    value={orKey}
-                    onChange={e => setOrKey(e.target.value)}
+                    value={myOrKey}
+                    onChange={e => setMyOrKey(e.target.value)}
                   />
                   <div className="form-actions">
-                    <button className="sp-logout" onClick={()=>{ try { if(orKey){ localStorage.setItem('or_key', orKey); setMineMasked(`${'*'.repeat(Math.max(0, orKey.length-6))}${orKey.slice(-6)}`); setOrKey(''); setEnvMessage('Saved my key locally.'); } } catch(e){ setEnvMessage(String(e)) } }}>Save My Key</button>
+                    <button className="sp-logout" onClick={()=>{ try { if(myOrKey){ localStorage.setItem('or_key', myOrKey); setMineMasked(`${'*'.repeat(Math.max(0, myOrKey.length-6))}${myOrKey.slice(-6)}`); setMyOrKey(''); setEnvMessage('Saved my key locally.'); } } catch(e){ setEnvMessage(String(e)) } }}>Save My Key</button>
                     {mineMasked && <button className="sp-settings" onClick={()=>{ try{ localStorage.removeItem('or_key'); setMineMasked(''); setEnvMessage('Removed my key from this browser.')} catch(e){ setEnvMessage(String(e)) } }}>Remove</button>}
                   </div>
                 </div>
@@ -169,7 +167,6 @@ export default function Settings() {
                   {envMessage && <span className="hint" style={{ marginLeft: 10 }}>{envMessage}</span>}
                 </div>
               </div>
-            )}
           </div>
         </section>
 
