@@ -1,12 +1,37 @@
-# React + Vite
+<<<<<<< HEAD
+# Prompt-Enhancer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite app for enhancing prompts using free LLMs via OpenRouter, with Supabase authentication and simple conversation history.
 
-Currently, two official plugins are available:
+## Features
+- Supabase OAuth (Microsoft/Azure) with persisted sessions
+- Model selector (DeepSeek v3.1, GPT-OSS 120B, Qwen3 Coder)
+- Streaming completions bridged through a minimal Express server
+- Conversation history, copy output, delete conversation
+- Client-side audit logging to `auth_events` table (optional)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Getting started
+1) Install deps:
+   - `npm i`
+2) Create `.env` in project root with:
+   - `VITE_SUPABASE_URL=...`
+   - `VITE_SUPABASE_ANON_KEY=...`
+   - `OPENROUTER_API_KEY=...`
+   - `APP_URL=http://localhost:5173`
+3) Run the backend bridge:
+   - `node server/index.js`
+4) In another terminal, run the web app:
+   - `npm run dev`
 
-## Expanding the ESLint configuration
+## OpenRouter models
+Server exposes `/api/providers` and forwards the chosen `model` to `https://openrouter.ai/api/v1/chat/completions`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Optional: audit table
+Create table `auth_events` (SQL in comments in `src/lib/audit.js`) to log sign-in/out and session restore events.
+
+## Build
+`npm run build` then serve `/dist` behind the same origin as the server.
+=======
+# Prompt-Enhancer
+A basic Prompt enhancher using free LLMs provided by Openrouter made with React and managed users using supabase
+>>>>>>> origin/main
