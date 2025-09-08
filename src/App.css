@@ -1,0 +1,596 @@
+/* ---------- THEME VARIABLES ---------- */
+:root {
+  --bg: #f6f7f8;
+  --text: #1f2430;
+
+  --card: #ffffff;
+  --muted-border: #e6e6e6;
+  --muted-border-strong: #d0d0d0;
+
+  --btn-bg: #f7f7f7;
+  --btn-bg-hover: #f2f2f2;
+
+  --shadow: rgba(0,0,0,.06);
+  --shadow-strong: rgba(0,0,0,.10);
+
+  --bar-bg: rgba(255,255,255,0.55);
+  --bar-border: rgba(0,0,0,0.08);
+
+  /* subtle corners everywhere (~2.5/10 for 56px inputs) */
+  --radius: 8px;
+  --side-w: 260px; /* sidebar width used for fixed dock alignment */
+  --accent: #10a37f;
+  --composer-h: 44px;      /* input + send button height */
+  --send-icon: 22px;       /* send icon size */
+}
+
+:root[data-theme="dark"] {
+  --bg: #111416;
+  --text: #e9edf1;
+
+  --card: #15181b;
+  --muted-border: #24282c;
+  --muted-border-strong: #2e3338;
+
+  --btn-bg: #171a1d;
+  --btn-bg-hover: #1d2125;
+
+  --shadow: rgba(0,0,0,.35);
+  --shadow-strong: rgba(0,0,0,.55);
+
+  --bar-bg: rgba(15,18,20,0.55);
+  --bar-border: rgba(255,255,255,0.08);
+  --side-w: 260px;
+  --accent: #19c592;
+  --composer-h: 44px;
+  --send-icon: 22px;
+}
+
+/* apply theme colors + remove any default margins */
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  transition: background-color .2s ease, color .2s ease;
+}
+
+/* ------------------------------------ */
+/* Landing page wrapper (centered) */
+#root {
+  max-width: 2000px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+/* When the Claude-like app is mounted, make layout flush-left */
+#root:has(.claude-app) {
+  max-width: none;
+  padding: 0;
+  text-align: initial;
+}
+
+/* Logo with glow effect */
+.logo {
+  width: 120px;
+  margin-bottom: 20px;
+  transition: transform .3s ease, filter .3s ease;
+}
+.logo:hover {
+  transform: scale(1.06);
+  filter: drop-shadow(0 0 10px rgba(40, 205, 255, 0.8))
+          drop-shadow(0 0 20px rgba(28, 38, 48, 0.6));
+}
+
+.hero-button {
+  padding: 14px 36px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #444, #222);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 6px 0 #000, 0 8px 15px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+}
+.hero-button:hover { transform: translateY(-2px); box-shadow: 0 8px 0 #000, 0 12px 20px rgba(0,0,0,.5); }
+.hero-button:active { transform: translateY(4px); box-shadow: 0 2px 0 #000, 0 4px 6px rgba(0,0,0,.3); }
+
+/* ---------- Top bar (used on both pages) ---------- */
+.topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 64px;
+  /* solid fallback to avoid a white flash or odd contrast in dark mode */
+  background-color: var(--bg);
+  background: var(--bar-bg);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid var(--bar-border);
+  z-index: 100; /* above everything */
+}
+.topbar-inner {
+  height: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.brand { font-weight: 700; letter-spacing: .3px; }
+
+/* theme switch */
+.theme-toggle { display: inline-flex; align-items: center; gap: 10px; user-select: none; cursor: pointer; }
+.theme-toggle input { display: none; }
+.theme-toggle .slider {
+  position: relative; width: 48px; height: 28px; border-radius: 999px;
+  background: rgba(127,127,127,.3); border: 1px solid var(--bar-border);
+  box-shadow: inset 0 2px 6px rgba(0,0,0,.12);
+  transition: background .2s ease, border-color .2s ease;
+}
+.theme-toggle .slider::after {
+  content: ""; position: absolute; top: 3px; left: 3px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  transition: transform .2s ease, background .2s ease;
+}
+:root[data-theme="dark"] .theme-toggle .slider { background: rgba(200,200,200,.2); }
+:root[data-theme="dark"] .theme-toggle .slider::after { background: #e6e6e6; }
+.theme-toggle input:checked + .slider::after { transform: translateX(20px); }
+.mode-text { font-size: .95rem; opacity: .9; }
+
+/* ===== Claude-like chat shell ===== */
+.claude-app, .claude-app * {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+               Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Grid under the fixed topbar */
+.claude-app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: calc(100vh - 64px);
+  padding-top: 64px; /* ensures content starts below the topbar */
+}
+
+/* Left panel (flush-left, sticky) */
+.c-side {
+  background: var(--card);
+  border-right: 1px solid var(--muted-border);
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+
+  position: sticky; top: 64px;
+  height: calc(100vh - 64px);
+}
+.c-logo { font-weight: 800; text-align: left; }
+
+.c-primary {
+  align-self: stretch;
+  background: #2a2a2a; color: #fff; border: none;
+  border-radius: var(--radius);
+  padding: 10px 12px; cursor: pointer; text-align: left;
+}
+:root[data-theme="dark"] .c-primary { background: #3b3f45; }
+
+.c-side-links { display: grid; gap: 6px; margin-top: 6px; }
+.c-link {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px; border-radius: var(--radius);
+  color: var(--text); cursor: pointer;
+}
+.c-link:hover { background: var(--btn-bg-hover); }
+
+.c-section { margin: 10px 0 6px; font-size: .9rem; opacity: .8; text-align: left; }
+.c-list { list-style: none; margin: 0; padding: 0; overflow: auto; }
+.c-item { padding: 8px 10px; border-radius: var(--radius); cursor: pointer; text-align: left; }
+.c-item:hover { background: var(--btn-bg-hover); }
+.c-item.active { background: var(--btn-bg); border: 1px solid var(--muted-border); }
+.c-empty { opacity: .7; padding: 8px 10px; }
+
+.c-account {
+  margin-top: auto; padding: 10px;
+  border: 1px solid var(--muted-border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+/* main column */
+.c-main { background: var(--bg); display: flex; flex-direction: column; overflow: auto; }
+
+/* center headline + ask bar */
+.c-center { max-width: 1200px; margin: 48px auto 18px; padding: 0 16px; }
+.c-center-title { text-align: center; margin: 0 0 16px; font-weight: 700; }
+
+.c-ask-wrap { display: flex; gap: 10px; align-items: center; justify-content: center; }
+
+/* single-line input, centered text, subtle corners */
+.c-ask-input {
+  flex: 1; max-width: 2000px;
+  height: 56px; padding: 0 18px;
+  border: 1px solid var(--muted-border);
+  border-radius: var(--radius);
+  background: var(--card); color: var(--text);
+  outline: none;
+}
+.c-ask-input:focus { border-color: var(--muted-border-strong); box-shadow: 0 0 0 3px rgba(0,0,0,.03); }
+
+.c-send {
+  padding: 10px 16px;
+  border: 1px solid var(--muted-border);
+  background: var(--btn-bg); color: var(--text);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.c-send:hover { background: var(--btn-bg-hover); }
+
+/* suggestions row */
+.c-suggestions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.c-suggestion {
+  border: 1px solid var(--muted-border);
+  background: var(--card); color: var(--text);
+  padding: 8px 10px; border-radius: var(--radius); cursor: pointer;
+}
+.c-suggestion:hover { background: var(--btn-bg-hover); }
+
+/* messages column centered, with role-specific presentation */
+.c-messages{
+  max-width: 1200px;
+  margin: 10px auto 32px;
+  padding: 0 16px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.c-msg.user { align-self: flex-end; }
+.c-msg.assistant { align-self: center; }
+
+/* user: small rounded rectangle on the right */
+.c-user-box{
+  background: var(--card);
+  border: 1px solid var(--muted-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  max-width: 60ch;
+  white-space: pre-wrap;
+}
+
+/* assistant: plain text (no box), centered/justified */
+.c-assistant-text{
+  border: none;
+  background: transparent;
+  max-width: 72ch;
+  white-space: pre-wrap;
+  text-align: justify;
+  line-height: 1.55;
+  font-size: 1rem;
+}
+
+/* small copy button below assistant messages */
+.copy-btn{
+  padding:6px 10px;
+  font-size: .9rem;
+  border-radius: 8px;
+  border: 1px solid var(--muted-border);
+  background: var(--btn-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.copy-btn:hover{ background: var(--btn-bg-hover); }
+
+
+
+/* ---------- THEME VARIABLES ---------- */
+:root{
+  --bg:#f6f7f8; --text:#1f2430;
+  --card:#fff; --muted-border:#e6e6e6; --muted-border-strong:#d0d0d0;
+  --btn-bg:#f7f7f7; --btn-bg-hover:#f2f2f2;
+  --shadow:rgba(0,0,0,.06); --shadow-strong:rgba(0,0,0,.10);
+  --bar-bg:rgba(255,255,255,.55); --bar-border:rgba(0,0,0,.08);
+}
+:root[data-theme="dark"]{
+  --bg:#111416; --text:#e9edf1;
+  --card:#15181b; --muted-border:#24282c; --muted-border-strong:#2e3338;
+  --btn-bg:#171a1d; --btn-bg-hover:#1d2125;
+  --shadow:rgba(0,0,0,.35); --shadow-strong:rgba(0,0,0,.55);
+  --bar-bg:rgba(15,18,20,.55); --bar-border:rgba(255,255,255,.08);
+}
+html,body{background:var(--bg); color:var(--text); transition:background-color .2s,color .2s;}
+#root{max-width:2000px; margin:0 auto; padding:2rem; text-align:center;}
+/* Remove default #root padding when the claude layout is mounted */
+#root:has(.claude-app){padding:0; text-align:initial;}
+
+/* ---------- TOP BAR ---------- */
+.topbar{position:fixed; top:0; left:0; right:0; height:64px;
+  background:var(--bar-bg); backdrop-filter:blur(14px) saturate(140%);
+  -webkit-backdrop-filter:blur(14px) saturate(140%);
+  border-bottom:1px solid var(--bar-border); z-index:50;}
+.topbar-inner{height:100%; max-width:none; margin:0; padding:0 16px;
+  display:flex; align-items:center; justify-content:space-between;}
+.brand{font-weight:700; letter-spacing:.3px;}
+.theme-toggle{display:inline-flex; align-items:center; gap:10px; user-select:none; cursor:pointer;}
+.theme-toggle input{display:none;}
+.theme-toggle .slider{position:relative; width:48px; height:28px; border-radius:999px;
+  background:rgba(127,127,127,.3); border:1px solid var(--bar-border); box-shadow:inset 0 2px 6px rgba(0,0,0,.12);
+  transition:background .2s,border-color .2s;}
+.theme-toggle .slider::after{content:""; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%;
+  background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .2s, background .2s;}
+:root[data-theme="dark"] .theme-toggle .slider{background:rgba(200,200,200,.2);}
+:root[data-theme="dark"] .theme-toggle .slider::after{background:#e6e6e6;}
+.theme-toggle input:checked + .slider::after{transform:translateX(20px);}
+.mode-text{font-size:.95rem; opacity:.9;}
+
+/* ---------- CLAUDE-LIKE SHELL ---------- */
+.claude-app, .claude-app *{
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Helvetica Neue",Arial,sans-serif;
+}
+.claude-app{display:grid; grid-template-columns:260px 1fr; height:100vh; margin-top:64px;}
+
+/* Sidebar (flush-left, tight padding) */
+.c-side{background:var(--card); border-right:1px solid var(--muted-border);
+  padding:10px 10px 12px 8px; display:flex; flex-direction:column; gap:10px;}
+.c-primary{align-self:stretch; background:#2a2a2a; color:#fff; border:none; border-radius:12px;
+  padding:10px 12px; cursor:pointer; text-align:left;}
+:root[data-theme="dark"] .c-primary{background:#3b3f45;}
+.c-section{margin:10px 0 6px; font-size:.9rem; opacity:.8; text-align:left;}
+.c-list{list-style:none; margin:0; padding:0; overflow:auto;}
+.c-item{display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:8px 8px; border-radius:10px; cursor:pointer;}
+.c-item:hover{background:var(--btn-bg-hover);}
+.c-item.active{background:var(--btn-bg); border:1px solid var(--muted-border);}
+.c-title{all:unset; color:var(--text); flex:1; text-align:left; cursor:pointer;}
+.c-icon-btn{display:inline-flex; align-items:center; justify-content:center;
+  width:28px; height:28px; border:none; background:transparent; color:var(--text); border-radius:8px; opacity:.8;}
+.c-icon-btn:hover{background:var(--btn-bg-hover); opacity:1;}
+.c-empty{opacity:.7; padding:8px 10px;}
+.c-account{margin-top:auto; padding:10px; border:1px solid var(--muted-border); border-radius:12px; background:var(--card);}
+.c-link{padding:6px 8px; border:1px solid var(--muted-border); background:var(--btn-bg); color:var(--text);
+  border-radius:10px; cursor:pointer; display:inline-block;}
+.c-link:hover{background:var(--btn-bg-hover);}
+
+/* Main column */
+.c-main{background:var(--bg); display:flex; flex-direction:column; overflow:auto;}
+.c-center{max-width:900px; margin:48px auto 18px; padding:0 16px;}
+.c-center-title{text-align:center; margin:0 0 16px; font-weight:700;}
+.c-ask-wrap{display:flex; gap:10px; align-items:center; justify-content:center;}
+.c-ask-input{flex:1; max-width:760px; height:var(--composer-h); padding:0 14px; border:1px solid var(--muted-border);
+  border-radius:14px; background:var(--card); color:var(--text); outline:none;}
+.c-ask-input:focus{border-color:var(--muted-border-strong); box-shadow:0 0 0 3px rgba(0,0,0,.03);}
+.c-send{
+  width: var(--composer-h); height: var(--composer-h);
+  border: 1px solid var(--muted-border);
+  background: var(--btn-bg);
+  color: var(--text);
+  border-radius: 12px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 0 var(--shadow), inset 0 -1px 0 rgba(0,0,0,.04);
+  transition: box-shadow .18s ease, transform .08s ease, background .18s ease;
+}
+.c-send svg { width: var(--send-icon); height: var(--send-icon); }
+.c-send:hover{ background: var(--btn-bg-hover); box-shadow: 0 0 0 1px rgba(0,0,0,.04), 0 0 14px var(--accent); }
+.c-send:active{ transform: translateY(1px) scale(.98); box-shadow: 0 0 0 2px var(--accent) inset; }
+
+/* Messages */
+.c-messages{max-width:900px; margin:10px auto 32px; padding:0 16px; width:100%;}
+.c-bubble{max-width:70ch; padding:12px 14px; margin:10px 0; border:1px solid var(--muted-border);
+  border-radius:12px; background:var(--card);}
+.c-bubble.bot{background:var(--btn-bg);}
+.c-pre{white-space:pre-wrap; font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace; margin:0;}
+
+/* -------------------- LAYOUT & ICON FIXES -------------------- */
+/* These rules make sure the left sidebar is always placed at the left
+   edge and is full-height under the topbar, and ensure SVG icons
+   (like the trash icon) inherit the current theme color. They are
+   written as an override block to avoid touching the larger stylesheet
+   and to be resilient to the duplicate rules earlier in this file. */
+
+/* Ensure the app grid spans full width and sits below the topbar */
+#root:has(.claude-app) { padding: 0; }
+.claude-app {
+  display: grid !important;
+  grid-template-columns: 260px 1fr !important;
+  width: 100vw !important;
+  min-height: calc(100vh - 64px) !important;
+  margin-top: 64px !important; /* reserve space for topbar */
+  align-items: stretch;
+}
+
+/* Sidebar should be sticky under the topbar and take full height */
+.c-side {
+  position: sticky !important;
+  top: 64px !important;
+  height: calc(100vh - 64px) !important;
+  min-width: 260px !important;
+  box-sizing: border-box;
+}
+
+/* Ensure icon buttons' SVGs inherit the current text color so
+   stroke=currentColor works reliably across themes */
+.c-icon-btn, .c-icon-btn * { color: var(--text) !important; }
+.c-icon-btn svg { display: block; }
+.c-icon-btn svg path, .c-icon-btn svg line, .c-icon-btn svg rect { stroke: currentColor; }
+
+/* Keep the topbar above the sidebar */
+.topbar { z-index: 200 !important; }
+
+/* ---- spacing overrides ---- */
+.claude-app { 
+  margin-top: 64px !important;       /* sit below fixed topbar */
+  padding-top: 0 !important;         /* no double offset */
+  height: calc(100vh - 64px) !important; /* lock viewport height under topbar */
+}
+
+.c-center { 
+  margin-top: 12px !important;       /* was 48px in one block */
+}
+
+/* Enhancer visual tweaks: sticky input, wider input/messages, tighter spacing */
+.c-center { max-width: 1200px; margin: 6px auto 8px; padding: 0 16px; }
+.c-center-title { margin: 6px 0 10px; }
+
+.c-ask-wrap {
+  display: flex; gap: 12px; align-items: center; justify-content: center;
+  position: sticky; top: calc(64px + 8px); z-index: 10; padding: 6px 0; background: transparent;
+}
+
+.c-ask-input { width: 72%; max-width: 1100px; min-width: 340px; border-radius: 8px; padding: 10px 14px; }
+.c-send { border-radius: 8px; }
+
+.c-messages { max-width: 1100px; margin: 6px auto 24px; padding: 0 16px; }
+
+.c-user-box, .c-bubble, .c-assistant-text { border-radius: 8px; }
+
+
+/* Sidebar: tighter padding, fixed min width, and scrollable history list */
+.c-side {
+  padding: 12px !important;
+  min-width: 260px !important;
+  max-width: 320px !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  overflow: hidden !important; /* let internal list scroll */
+}
+
+/* History list should take available vertical space and scroll when long */
+.c-list {
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  padding-right: 6px; /* give room for scrollbar */
+  margin: 6px 0 !important;
+}
+
+/* Make each history item compact and avoid excessive blank spacing */
+.c-item { padding: 8px 10px !important; margin: 6px 0 !important; }
+
+/* Keep account box pinned at the bottom of the sidebar */
+.c-account { margin-top: auto !important; position: relative; z-index: 5; }
+
+/* Remove any large top padding/gap inside the sidebar */
+.c-side > :first-child { margin-top: 0 !important; }
+
+/* Slightly reduce New Prompt button overflow and ensure full-width */
+.c-primary { width: 100%; box-sizing: border-box; }
+
+
+/* ===== ChatGPT-like bottom input dock ===== */
+.c-input-dock {
+  /* Sticky dock inside the main scroll frame */
+  position: sticky;
+  bottom: 0;
+  padding: 12px 16px 16px;
+  background: linear-gradient(to top, var(--bg) 80%, rgba(0,0,0,0) 100%);
+  z-index: 10;
+}
+
+/* ensure messages don't hide behind the dock */
+.c-messages { padding-bottom: 96px; }
+
+/* remove previous top-sticky behavior for ask bar in this layout */
+.c-ask-wrap { position: static !important; top: auto !important; padding: 0; background: transparent; }
+.c-input-dock .c-ask-wrap { position: static; }
+
+/* ----- Independent frames: sidebar and main scroll separately ----- */
+/* Lock the app grid to the viewport and allow content to slide under the translucent topbar */
+.claude-app {
+  position: fixed !important;
+  top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+  display: grid !important;
+  grid-template-columns: var(--side-w) 1fr !important;
+  margin: 0 !important; padding: 64px 0 0 0 !important; /* push content below 64px topbar */
+  overflow: hidden !important; overflow-x: hidden !important;
+  height: auto !important; /* override earlier height rules */
+}
+
+/* Sidebar column */
+.c-side {
+  position: relative !important;
+  height: 100% !important;
+  overflow: hidden !important; /* only the list scrolls */
+  display: flex !important; flex-direction: column !important;
+}
+.c-list { flex: 1 1 auto !important; overflow: auto !important; }
+
+/* Main column */
+.c-main {
+  height: 100% !important; min-height: 0 !important;
+  overflow: visible !important; /* allow scroller to blend under topbar */
+  display: flex; flex-direction: column;
+}
+.c-messages { flex: 1 1 auto; overflow: auto; padding-bottom: 160px; }
+/* Let assistant content glide under the glass top bar while bar stays fixed */
+.c-messages { margin-top: -64px !important; padding-top: 64px !important; }
+
+/* Sidebar spacing fixes: remove extra gap at top and ensure footer is visible */
+.c-side {
+  padding: 8px 12px 16px 12px !important;
+  margin: 0 !important;
+  box-sizing: border-box;
+  border-right: 1px solid var(--muted-border) !important;
+  background: var(--card) !important;
+}
+.c-list { padding-right: 4px !important; margin-top: 8px !important; }
+.c-primary { margin-top: 0 !important; }
+/* Lift the account card slightly so it never hugs/crops at the bottom */
+.c-account { position: sticky; bottom: 16px; margin-bottom: 0 !important; }
+
+/* ===== New Sidepanel (sp-*) ===== */
+.sp-side {
+  background: var(--card);
+  border-right: 1px solid var(--muted-border);
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+.sp-header { padding: 10px 12px 6px 12px; }
+.sp-title { margin: 10px 2px 6px; font-size: .9rem; opacity: .8; }
+.sp-new {
+  width: 100%;
+  background: #2a2a2a; color: #fff; border: none; border-radius: 12px;
+  padding: 10px 12px; cursor: pointer; text-align: left; display: inline-flex; align-items: center;
+}
+:root[data-theme="dark"] .sp-new { background: #3b3f45; }
+.sp-scroll { overflow: auto; padding: 0 8px; }
+.sp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.sp-item { display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 8px 8px; border-radius: 10px; cursor: pointer; }
+.sp-item:hover { background: var(--btn-bg-hover); }
+.sp-item.is-active { background: var(--btn-bg); border: 1px solid var(--muted-border); }
+.sp-item-title { all: unset; color: var(--text); flex: 1 1 auto; min-width: 0; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-item-icon {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:28px; height:28px; min-width:28px; flex-shrink:0;
+  margin-left: auto; /* push to far right */
+  border:1px solid var(--muted-border); background: var(--btn-bg);
+  color:var(--text); border-radius:8px; opacity:1;
+  cursor: pointer;
+}
+.sp-item-icon:hover{ background: var(--btn-bg-hover); }
+.sp-item-icon:focus{ outline: 2px solid var(--muted-border-strong); outline-offset: 2px; }
+.sp-item-icon svg{ width:20px; height:20px; display:block; color:inherit; }
+.sp-item-icon svg path{ stroke: currentColor; stroke-width:2.1; }
+
+/* ensure theme color is applied even if inline props are missing */
+.sp-icon { width:20px; height:20px; color: var(--text); display:block; }
+.sp-icon path { stroke: currentColor; stroke-width:2.1; }
+
+/* small contrast boost on dark surfaces */
+:root[data-theme="dark"] .sp-item-icon svg { filter: drop-shadow(0 0 0.5px rgba(0,0,0,.4)); }
+.sp-empty { opacity: .7; padding: 8px 10px; }
+.sp-footer { position: sticky; bottom: 12px; padding: 10px 12px; }
+.sp-user { border: 1px solid var(--muted-border); border-radius: 12px; background: var(--card); padding: 10px; }
+.sp-logout { margin-top: 8px; padding: 6px 8px; border: 1px solid var(--muted-border); background: var(--btn-bg); color: var(--text); border-radius: 10px; cursor: pointer; }
+.sp-logout:hover { background: var(--btn-bg-hover); }
+
+/* Provider bar (model selector) */
+.pb-bar { display:flex; gap:8px; justify-content:center; padding:6px 0 10px; flex-wrap:wrap; }
+.pb-pill {
+  border:1px solid var(--muted-border);
+  background: var(--btn-bg);
+  color: var(--text);
+  padding:6px 10px; border-radius:999px; cursor:pointer;
+}
+.pb-pill:hover { background: var(--btn-bg-hover); }
+.pb-pill.is-active { background: var(--card); box-shadow: 0 0 0 2px var(--accent) inset; border-color: var(--muted-border-strong); }
