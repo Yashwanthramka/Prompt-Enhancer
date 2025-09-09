@@ -31,7 +31,81 @@ const providers = [
   { key: 'deepseek/deepseek-chat-v3.1:free', label: 'DeepSeek v3.1 (free)' },
   { key: 'openai/gpt-oss-120b:free', label: 'GPT‑OSS 120B (free)' },
   { key: 'qwen/qwen3-coder:free', label: 'Qwen3 Coder (free)' }
-]
+ ]
+
+ // Remove unsupported models (Qwen, GPT-OSS, Gemini)
+ try { providers.splice(1) } catch {}
+
+ // Add Groq provider (free-tier requires API key)
+ providers.push({ key: 'groq/llama-3.1-8b-instant', label: 'Groq Llama3.1 8B' })
+
+// --- Streaming helpers ---
+function sse(res, payload) {
+  res.write(`data: ${JSON.stringify(payload)}\n\n`)
+}
+
+async function streamFake(res, userText) {
+  const out = `Objective: Improve the prompt\n\n- Rewrite concisely\n- Use active voice\n- Keep bullets scannable\n\nFinal Prompt:\n${userText}`
+  for (const chunk of out.split(/(\\s+)/)) {
+    sse(res, { token: chunk })
+    await new Promise(r => setTimeout(r, 12))
+  }
+  res.write('data: [DONE]\n\n')
+  res.end()
+}
+
+async function streamOpenRouter(res, { key, referer, payload }) {
+  const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
+      'Authorization': `Bearer ${key}`,
+      'HTTP-Referer': referer,
+      'X-Title': 'Prompt Enhancer'
+    },
+    body: JSON.stringify(payload)
+  })
+
+  if (!orRes.ok || !orRes.body) {
+    const txt = await orRes.text().catch(() => '')
+    throw new Error(txt || orRes.statusText || 'Upstream error')
+  }
+
+  const reader = orRes.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let idx
+    while ((idx = buffer.indexOf('\n\n')) !== -1) {
+      const part = buffer.slice(0, idx)
+      buffer = buffer.slice(idx + 2)
+      const line = part.trim()
+      if (!line) continue
+      const m = line.match(/^data:\s*(.*)$/)
+      if (!m) continue
+      const data = m[1]
+      if (data === '[DONE]') { res.write('data: [DONE]\n\n'); res.end(); return }
+      try {
+        const obj = JSON.parse(data)
+        const delta = obj?.choices?.[0]?.delta?.content
+        const content = obj?.choices?.[0]?.message?.content
+        const token = delta ?? content ?? ''
+        if (token) sse(res, { token })
+      } catch { /* ignore parse errors */ }
+    }
+  }
+  res.write('data: [DONE]\n\n')
+  res.end()
+}
+
+// For accidental GETs in browser
+app.get('/api/complete', (_req, res) => {
+  res.status(405).json({ error: 'Use POST with JSON body: { providerModel, rulesetId, rulesContent, messages, stream }' })
+})
 
 app.get('/api/providers', (_req, res) => {
   res.json({ providers })
@@ -83,6 +157,62 @@ app.post('/api/admin/rulesets', adminGuard, (req, res) => {
   }
 })
 
+// Google Gemini streaming via REST SSE
+// Gemini support removed\n}
+
+// Groq OpenAI-compatible streaming
+async function streamGroq(res, { key, model, systemText, userText }) {
+  const url = 'https://api.groq.com/openai/v1/chat/completions'
+  const payload = {
+    model,
+    stream: true,
+    messages: [
+      { role: 'system', content: String(systemText || 'You are a helpful assistant.') },
+      { role: 'user', content: String(userText || '') }
+    ]
+  }
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${key}`
+    },
+    body: JSON.stringify(payload)
+  })
+  if (!r.ok || !r.body) {
+    const txt = await r.text().catch(() => '')
+    throw new Error(txt || r.statusText || 'Groq upstream error')
+  }
+  const reader = r.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let idx
+    while ((idx = buffer.indexOf('\n\n')) !== -1) {
+      const part = buffer.slice(0, idx)
+      buffer = buffer.slice(idx + 2)
+      const line = part.trim()
+      if (!line) continue
+      const m = line.match(/^data:\s*(.*)$/)
+      if (!m) continue
+      const data = m[1]
+      if (data === '[DONE]') { res.write('data: [DONE]\n\n'); res.end(); return }
+      try {
+        const obj = JSON.parse(data)
+        const delta = obj?.choices?.[0]?.delta?.content
+        const content = obj?.choices?.[0]?.message?.content
+        const token = delta ?? content ?? ''
+        if (token) sse(res, { token })
+      } catch { /* ignore */ }
+    }
+  }
+  res.write('data: [DONE]\n\n')
+  res.end()
+}
+
 app.post('/api/complete', async (req, res) => {
   const { providerModel, rulesetId = 'enhancer-default', rulesContent, messages = [], stream = true } = req.body || {}
   // Allow per-user override via header (not stored) or fallback to env
@@ -97,76 +227,63 @@ app.post('/api/complete', async (req, res) => {
   const sys = { role: 'system', content: rules.system || 'You are a helpful assistant.' }
   const payload = { model: providerModel || providers[0].key, messages: [sys, ...messages], stream: !!stream }
 
+  // Minimal debug logging (no secrets)
+  try {
+    const firstUser = (messages || []).find(m => m?.role === 'user')?.content || ''
+    console.log('[complete] model=%s ruleset=%s overrideKey=%s msgChars=%d sysChars=%d',
+      payload.model,
+      rulesetId,
+      overrideKey ? 'yes' : 'no',
+      firstUser.length,
+      String(sys.content || '').length
+    )
+  } catch {}
+
   // Streaming headers to client
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache, no-transform')
   res.setHeader('Connection', 'keep-alive')
 
-  // Fallback: no key => simulate streaming
-  if (!key) {
-    const fake = (txt) => `Objective: Improve the prompt\n\n- Rewrite concisely\n- Use active voice\n- Keep bullets scannable\n\nFinal Prompt:\n${txt}`
-    const user = messages?.find(m => m.role === 'user')?.content || ''
-    const out = fake(user)
-    for (const chunk of out.split(/(\s+)/)) {
-      res.write(`data: ${JSON.stringify({ token: chunk })}\n\n`)
-      await new Promise(r => setTimeout(r, 12))
-    }
+  const userText = messages?.find(m => m.role === 'user')?.content || ''
+
+  // Branch: Google Gemini (removed)
+  if (String(payload.model).startsWith('google/')) {
+    sse(res, { error: 'Model not supported' })
     res.write('data: [DONE]\n\n')
     return res.end()
   }
 
+  // Branch: Groq
+  if (String(payload.model).startsWith('groq/')) {
+    const groqModel = String(payload.model).slice('groq/'.length)
+    const gk = process.env.GROQ_API_KEY
+    if (!gk) {
+      sse(res, { token: '[Local fallback: no Groq key found]\n' })
+      return streamFake(res, userText)
+    }
+    try {
+      await streamGroq(res, { key: gk, model: groqModel, systemText: sys.content, userText })
+    } catch (err) {
+      const msg = String(err?.message || err || 'Groq upstream error')
+      console.warn('Groq error:', msg)
+      sse(res, { token: `[Groq error: ${msg}]\n` })
+      return streamFake(res, userText)
+    }
+    return
+  }
+
+  // Default: OpenRouter
+  if (!key) {
+    sse(res, { token: '[Local fallback: no OpenRouter key found]\n' })
+    return streamFake(res, userText)
+  }
   try {
-    const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${key}`,
-        'HTTP-Referer': referer,
-        'X-Title': 'Prompt Enhancer'
-      },
-      body: JSON.stringify(payload)
-    })
-
-    if (!orRes.ok || !orRes.body) {
-      const txt = await orRes.text().catch(() => '')
-      res.write(`data: ${JSON.stringify({ error: txt || orRes.statusText })}\n\n`)
-      res.write('data: [DONE]\n\n')
-      return res.end()
-    }
-
-    const reader = orRes.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      let idx
-      while ((idx = buffer.indexOf('\n\n')) !== -1) {
-        const part = buffer.slice(0, idx)
-        buffer = buffer.slice(idx + 2)
-        const line = part.trim()
-        if (!line) continue
-        // Expect lines like: data: {...}
-        const m = line.match(/^data:\s*(.*)$/)
-        if (!m) continue
-        const data = m[1]
-        if (data === '[DONE]') { res.write('data: [DONE]\n\n'); res.end(); return }
-        try {
-          const obj = JSON.parse(data)
-          const delta = obj?.choices?.[0]?.delta?.content
-          const content = obj?.choices?.[0]?.message?.content
-          const token = delta ?? content ?? ''
-          if (token) res.write(`data: ${JSON.stringify({ token })}\n\n`)
-        } catch { /* ignore parse errors */ }
-      }
-    }
-    res.write('data: [DONE]\n\n')
-    res.end()
+    await streamOpenRouter(res, { key, referer, payload })
   } catch (err) {
-    res.write(`data: ${JSON.stringify({ error: String(err) })}\n\n`)
-    res.write('data: [DONE]\n\n')
-    res.end()
+    const msg = String(err?.message || err || 'Upstream error')
+    console.warn('OpenRouter error:', msg)
+    sse(res, { token: `[OpenRouter error: ${msg}]\n` })
+    return streamFake(res, userText)
   }
 })
 
@@ -174,7 +291,15 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
 // --- Admin: .env editor (limited keys) ---
 const envPath = path.resolve(__dirname, '..', '.env')
-const allowedEnvKeys = new Set(['OPENROUTER_API_KEY', 'APP_URL', 'VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'])
+const allowedEnvKeys = new Set([
+  'OPENROUTER_API_KEY',
+  'GROQ_API_KEY',
+  'APP_URL',
+  'VITE_SUPABASE_URL',
+  'VITE_SUPABASE_ANON_KEY',
+  // Allow overriding API base on the client when the server port auto-increments
+  'VITE_API_BASE'
+])
 
 const parseEnv = (txt) => {
   const map = new Map()
@@ -212,9 +337,10 @@ app.get('/api/admin/env', adminGuard, (_req, res) => {
     const map = parseEnv(txt)
     const mask = (v) => (v ? `${'*'.repeat(Math.max(0, v.length - 6))}${v.slice(-6)}` : '')
     const values = {}
+    const maskKeys = new Set(['OPENROUTER_API_KEY', 'GROQ_API_KEY'])
     for (const k of allowedEnvKeys) {
       const v = map.get(k) || ''
-      values[k] = k === 'OPENROUTER_API_KEY' ? { has: !!v, masked: mask(v) } : { value: v }
+      values[k] = maskKeys.has(k) ? { has: !!v, masked: mask(v) } : { value: v }
     }
     res.json({ values, path: envPath, note: 'Editing VITE_* requires rebuild to take effect in the client.' })
   } catch (e) {
@@ -242,10 +368,29 @@ app.put('/api/admin/env', adminGuard, (req, res) => {
   }
 })
 
-const PORT = process.env.PORT || 8787
-app.listen(PORT, () => console.log(`MCP bridge listening on http://localhost:${PORT}`))
+const DEFAULT_PORT = parseInt(process.env.PORT || '8787', 10)
+
+// Start server with retry when port is in use. This prevents the whole dev
+// runner from exiting if the default port is already taken.
+function startServer(port = DEFAULT_PORT, attempts = 0) {
+  const server = app.listen(port, () => console.log(`MCP bridge listening on http://localhost:${port}`))
+
+  server.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE' && attempts < 10) {
+      const next = port + 1
+      console.warn(`Port ${port} in use, trying ${next} (attempt ${attempts + 1})`)
+      // slight delay before retrying
+      setTimeout(() => startServer(next, attempts + 1), 150)
+      return
+    }
+    console.error('Server failed to start:', err)
+    process.exit(1)
+  })
+}
+
+startServer()
 // simple origin guard for admin routes (dev-only)
-const adminGuard = (req, res, next) => {
+function adminGuard(req, res, next) {
   const allowed = (process.env.APP_URL || 'http://localhost:5173')
   const origin = req.headers.origin || req.headers['x-forwarded-origin'] || ''
   if (origin && !origin.startsWith(allowed)) {
@@ -253,3 +398,4 @@ const adminGuard = (req, res, next) => {
   }
   next()
 }
+

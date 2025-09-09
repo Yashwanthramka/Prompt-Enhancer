@@ -282,6 +282,23 @@ html, body {
 
 
 
+/* ===== Verbose status panel ===== */
+.c-status{
+  max-width: 1100px;
+  margin: 6px auto 8px;
+  padding: 6px 8px;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--muted-border);
+  border-radius: 8px;
+  font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  font-size: .85rem;
+  max-height: 140px;
+  overflow: auto;
+  box-shadow: 0 1px 6px var(--shadow);
+}
+.c-status-line{ opacity: .95; white-space: pre-wrap; }
+
 /* ---------- THEME VARIABLES ---------- */
 :root{
   --bg:#f6f7f8; --text:#1f2430;

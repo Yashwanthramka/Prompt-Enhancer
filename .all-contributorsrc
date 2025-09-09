@@ -1,0 +1,30 @@
+{
+  "projectName": "Prompt-Enhancer",
+  "projectOwner": "Yashwanthramka",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "commitConvention": "none",
+  "contributorsPerLine": 7,
+  "contributors": [
+    {
+      "login": "Yashwanthramka",
+      "name": "Yashwanth",
+      "avatar_url": "https://github.com/Yashwanthramka.png",
+      "profile": "https://github.com/Yashwanthramka",
+      "contributions": ["code", "doc"]
+    },
+    {
+      "login": "Yashwanthram-Intern",
+      "name": "Yashwanth (Intern)",
+      "avatar_url": "https://github.com/Yashwanthram-Intern.png",
+      "profile": "https://github.com/Yashwanthram-Intern",
+      "contributions": ["code", "doc"]
+    }
+  ]
+}
+

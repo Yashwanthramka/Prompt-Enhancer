@@ -29,6 +29,10 @@
   </p>
 </div>
 
+<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
+<!-- ALL-CONTRIBUTORS-BADGE:END -->
+
 ## Features
 - Supabase OAuth (Microsoft/Azure) with persisted sessions and auto-redirect when a session exists
 - Model selector (DeepSeek v3.1, GPT-OSS 120B, Qwen3 Coder)
@@ -50,6 +54,12 @@
    - `npm run dev`
 
 Open http://localhost:5173 and sign in with your Microsoft account. If a local session exists, the app auto-redirects to `/app`.
+
+### Dev server and API base
+By default, the client uses Vite's proxy to route `/api/*` requests to `http://localhost:8787` where the Express server runs. If port 8787 is already in use, the server will auto-increment to the next available port (e.g., 8788). In that case either:
+
+- stop the process using 8787 and restart `npm run dev`, or
+- set `VITE_API_BASE` in `.env` to the actual server origin, e.g. `VITE_API_BASE=http://localhost:8788`, then restart Vite. The client will bypass the proxy and call that base URL directly.
 
 ## OpenRouter models
 The UI selects a model; the server forwards it to `https://openrouter.ai/api/v1/chat/completions`.
@@ -82,3 +92,21 @@ If you’d like to record sign-in/out and session-restore events, see `src/lib/a
 - Supabase wordmark from Supabase brand assets
 - OpenRouter icon included as `public/openrouter.svg`
 
+## Contributors ✨
+Thanks goes to these wonderful people:
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Yashwanthramka"><img src="https://github.com/Yashwanthramka.png" width="100px;" alt=""/><br /><sub><b>@Yashwanthramka</b></sub></a><br /><a href="#code" title="Code">💻</a> <a href="#doc" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Yashwanthram-Intern"><img src="https://github.com/Yashwanthram-Intern.png" width="100px;" alt=""/><br /><sub><b>@Yashwanthram-Intern</b></sub></a><br /><a href="#code" title="Code">💻</a> <a href="#doc" title="Documentation">📖</a></td>
+    </tr>
+  </tbody>
+  </table>
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->

@@ -1,7 +1,7 @@
 {
   "name": "enhancer",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.2.0",
   "type": "module",
   "scripts": {
     "start": "npm run dev",
@@ -10,7 +10,9 @@
     "dev:server": "node server/index.js",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "contributors:add": "all-contributors add",
+    "contributors:generate": "all-contributors generate"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
@@ -21,6 +23,7 @@
     "react-router-dom": "^7.8.2"
   },
   "devDependencies": {
+    "all-contributors-cli": "^6.26.1",
     "dotenv": "^16.4.5",
     "@eslint/js": "^9.33.0",
     "@types/react": "^19.1.10",

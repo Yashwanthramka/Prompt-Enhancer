@@ -1,336 +1,192 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { logAuthEvent } from '../lib/audit'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSupabaseSession } from '../hooks/useSupabaseSession'
+import { useTheme } from '../hooks/useTheme'
 import ProviderBar from '../components/ProviderBar'
 import { streamCompletion } from '../lib/stream'
+import { supabase } from '../lib/supabase'
 
-/* Mono icons */
 const Icon = {
   plus:   (p)=>(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" {...p}><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>),
   trash:  (p)=>(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" {...p}><path d="M3 6h18M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M7 6l1 14a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2L17 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>),
 }
 
-const signInWithMicrosoft = async () => {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'azure',
-    options: {
-      redirectTo: `${window.location.origin}/app?new=1`,
-      scopes: 'openid email profile'
-    }
-  })
-  if (error) { console.error('OAuth error:', error); alert(error.message); return }
-  if (data?.url) window.location.href = data.url
-}
-
 export default function Enhancer() {
-  const [user, setUser] = useState(null)
+  const { user, sessionChecked, signOut } = useSupabaseSession()
+  const { theme, toggle } = useTheme()
+
   const [conversations, setConversations] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
+  const [isStreaming, setIsStreaming] = useState(false)
+  const abortRef = useRef(null)
+
   const [model, setModel] = useState('deepseek/deepseek-chat-v3.1:free')
-  const [rulesets, setRulesets] = useState([])
-  const [rulesetId, setRulesetId] = useState(() => localStorage.getItem('rulesetId') || 'enhancer-default')
-  const mainRef = useRef(null)
+  // Rulesets are fixed to the default on the server; no selector.
+
+  // Verbose status panel
+  const [verbose, setVerbose] = useState(() => {
+    try { return localStorage.getItem('verbose') === '1' } catch { return false }
+  })
+  const [statusLines, setStatusLines] = useState([])
+  const pushStatus = useCallback((msg) => {
+    const ts = new Date()
+    const hh = String(ts.getHours()).padStart(2,'0')
+    const mm = String(ts.getMinutes()).padStart(2,'0')
+    const ss = String(ts.getSeconds()).padStart(2,'0')
+    const line = `[${hh}:${mm}:${ss}] ${msg}`
+    setStatusLines((arr) => {
+      const next = [...arr, line]
+      if (next.length > 200) next.splice(0, next.length - 200)
+      return next
+    })
+  }, [])
+  useEffect(() => { try { localStorage.setItem('verbose', verbose ? '1' : '0') } catch {} }, [verbose])
+
   const listRef = useRef(null)
   const bottomRef = useRef(null)
+  const copiedRef = useRef(null)
 
-  const isNearBottom = (el, px = 140) =>
-    el && (el.scrollHeight - el.scrollTop - el.clientHeight < px)
-
-  const scrollToBottomNow = (el) =>
-    el && el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-  const createdOnMount = useRef(false)
-  const [copiedId, setCopiedId] = useState(null)
-
-  // detect /app?new=1 only once on first render
-  const hasNewQuery = useMemo(() => {
-    return new URLSearchParams(window.location.search).get('new') === '1'
-  }, [])
-
-  // detect post-OAuth landing (Supabase puts tokens in the hash)
-  const hasFreshLogin = useMemo(() => {
-    return /(^|#|&)access_token=/.test(window.location.hash)
-  }, [])
-
-  // single flag used everywhere
-  const shouldStartNew = hasNewQuery || hasFreshLogin
-
-  // THEME
-  const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('manual-theme')
-    if (saved) return saved
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-  })
-  const [manual, setManual] = useState(() => !!localStorage.getItem('manual-theme'))
-
+  // Redirect home if not signed in
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-  }, [theme])
-
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = (e) => { if (!manual) setTheme(e.matches ? 'dark' : 'light') }
-    handler(mq)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [manual])
-
-  const onToggleTheme = (e) => {
-    const next = e.target.checked ? 'dark' : 'light'
-    setTheme(next); setManual(true); localStorage.setItem('manual-theme', next)
-  }
-
-  // Auth + session gate
-  const [sessionChecked, setSessionChecked] = useState(false)
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data?.session?.user ?? null)
-      setSessionChecked(true)
-    })
-    const { data } = supabase.auth.onAuthStateChange((e, s) => {
-      setUser(s?.user ?? null)
-      setSessionChecked(true)
-      logAuthEvent(e, s)
-    })
-    return () => data?.subscription?.unsubscribe?.()
-  }, [])
-
-  // Load available rulesets and persist selection
-  useEffect(() => { fetch('/api/rulesets').then(r => r.json()).then(d => setRulesets(d.rulesets || [])) }, [])
-  useEffect(() => { try { localStorage.setItem('rulesetId', rulesetId) } catch {} }, [rulesetId])
-
-  // If we land on /app with no session, bounce to home
-  useEffect(() => {
-    // Don't redirect if we appear to be in a post-OAuth landing
-    if (sessionChecked && !user && !shouldStartNew) {
-      window.location.replace('/')
-    }
+    if (sessionChecked && !user) window.location.replace('/')
   }, [sessionChecked, user])
 
-  // Handle OAuth errors that might come via query (?error=) or hash (#error=)
-  useEffect(() => {
-    const parse = (s) => new URLSearchParams(s.replace(/^[?#]/, ''))
-    const q = parse(window.location.search)
-    const h = parse(window.location.hash)
-    const err = q.get('error') || h.get('error')
-    if (err) {
-      const desc = q.get('error_description') || h.get('error_description')
-      alert(decodeURIComponent(desc || 'Sign-in was cancelled'))
-      window.location.replace('/')
-    }
-  }, [])
+  // No ruleset loading; server uses the default ruleset.
 
-  // Load conversations (skip auto-select if arriving with ?new=1 or fresh login)
+  // Load conversations on login
   useEffect(() => {
     if (!user) return
-    ;(async () => {
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('id,title,created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (!error) {
-        const list = data || []
-        setConversations(list)
-
-        // Only auto-select most recent if not starting a new one
-        if (list.length && !activeId && !shouldStartNew) {
-          setActiveId(list[0].id)
-        } else if (!list.length && !shouldStartNew) {
-          try { await newConversation('New Prompt') } catch (err) { console.error(err) }
-        }
-      }
-    })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user])
-
-  // Load messages
-  useEffect(() => {
-    if (!activeId) { setMessages([]); return }
     ;(async () => {
       const { data } = await supabase
-        .from('messages')
-        .select('id,role,content,created_at')
-        .eq('conversation_id', activeId)
-        .order('created_at', { ascending: true })
-      setMessages(data || [])
+        .from('conversations')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      setConversations(data || [])
+      const id = data?.[0]?.id || null
+      setActiveId(id)
+      if (id) await loadMessages(id)
     })()
-  }, [activeId])
+  }, [user])
 
-  // Keep bottom padding in sync with dock height and auto-scroll when near bottom
-  useEffect(() => {
-    const list = listRef.current
-    const dock = document.querySelector('.c-input-dock')
-    if (!list || !dock) return
-    const ro = new ResizeObserver(() => {
-      const h = dock.offsetHeight || 0
-      list.style.paddingBottom = `${h + 24}px`
-      if (isNearBottom(list)) list.scrollTo({ top: list.scrollHeight })
-    })
-    ro.observe(dock)
-    return () => ro.disconnect()
+  const loadMessages = useCallback(async (cid) => {
+    const { data } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', cid)
+      .order('created_at', { ascending: true })
+    setMessages(data || [])
   }, [])
 
-  // Auto-scroll when a new message appears, but only if user is near bottom
-  useEffect(() => {
-    const list = listRef.current
-    if (!list) return
-    if (isNearBottom(list)) scrollToBottomNow(list)
-  }, [messages.length])
-
-  // On first arrival with ?new=1 OR fresh post-OAuth hash, start new once and clean URL
-  useEffect(() => {
-    if (!user) return
-    if (!shouldStartNew) return
-    if (createdOnMount.current) return
-
-    createdOnMount.current = true
-    ;(async () => {
-      const id = await newConversation('New Prompt')
-      setActiveId(id)
-
-      // clean URL
-      const q = new URLSearchParams(window.location.search)
-      q.delete('new')
-      const clean = `${window.location.pathname}${q.toString() ? `?${q}` : ''}`
-      window.history.replaceState({}, '', clean)
-      if (window.location.hash) {
-        window.history.replaceState({}, '', clean)
-      }
-
-      setTimeout(() => document.querySelector('.c-ask-input')?.focus?.(), 0)
-    })()
-  }, [user, shouldStartNew])
-
-  // New conversation
-  const newConversation = async (title = 'New Prompt') => {
+  const newConversation = useCallback(async (title = 'New Prompt') => {
+    if (!user) return null
     const { data, error } = await supabase
       .from('conversations')
-      .insert({ user_id: user.id, title })
-      .select('id')
+      .insert({ title, user_id: user.id })
+      .select('*')
       .single()
-    if (!error && data) {
-      setConversations(prev => [{ id: data.id, title, created_at: new Date().toISOString() }, ...prev])
-      setActiveId(data.id)
-    }
-    return data?.id
-  }
+    if (error) return null
+    setConversations(cs => [data, ...cs])
+    setActiveId(data.id)
+    setMessages([])
+    return data.id
+  }, [user])
 
-  const ensureConversation = async (firstTitle) => activeId || newConversation(firstTitle)
+  const deleteConversation = useCallback(async (id) => {
+    await supabase.from('conversations').delete().eq('id', id)
+    await supabase.from('messages').delete().eq('conversation_id', id)
+    setConversations(cs => cs.filter(c => c.id !== id))
+    if (activeId === id) { setActiveId(null); setMessages([]) }
+  }, [activeId])
 
-  // Delete conversation
-  const deleteConversation = async (id) => {
-    const { error: mErr } = await supabase
-      .from('messages')
-      .delete()
-      .eq('conversation_id', id)
-    if (mErr) { console.error('Delete messages failed:', mErr); alert('Failed to delete messages.'); return }
+  const ensureConversation = useCallback(async (proposedTitle) => {
+    if (activeId) return activeId
+    const cid = await newConversation((proposedTitle || 'New Prompt').slice(0, 60))
+    return cid
+  }, [activeId, newConversation])
 
-    const { error: cErr } = await supabase
-      .from('conversations')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', user.id)
-    if (cErr) { console.error('Delete conversation failed:', cErr); alert('Failed to delete conversation.'); return }
-
-    const { data: fresh } = await supabase
-      .from('conversations')
-      .select('id,title,created_at')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-
-    setConversations(fresh || [])
-    if (activeId === id) {
-      const nextId = (fresh && fresh[0]?.id) || null
-      setActiveId(nextId)
-      if (!nextId) setMessages([])
-    }
-  }
-
-  // Placeholder enhancer
-  const enhanceText = (text) =>
-`**Context**: ${text}
-
-**Task**: Rewrite as a clear, professional prompt with bullet steps and a short summary.
-
-**Guidelines**: concise • active voice • scannable bullets.`
-
-  const onSend = async () => {
+  const onSend = useCallback(async () => {
     const t = input.trim()
-    if (!t || !user) return
-    const cid = await ensureConversation(t.slice(0, 60))
+    if (!t || !user || isStreaming) return
+    const cid = await ensureConversation(t)
+    if (!cid) return
 
+    // Persist user message immediately
     const userMsg = { conversation_id: cid, role: 'user', content: t }
     await supabase.from('messages').insert(userMsg)
     setMessages(m => [...m, { id: crypto.randomUUID(), ...userMsg, created_at: new Date().toISOString() }])
-    // nudge to bottom if the user was reading the latest
-    requestAnimationFrame(() => {
-      const list = listRef.current
-      if (list && isNearBottom(list, 220)) scrollToBottomNow(list)
-    })
 
-    const conv = conversations.find(c => c.id === cid)
-    const isDefaultTitle = (title) => {
-      if (!title) return true
-      const def = ['New chat', 'New Prompt', 'New', 'Untitled']
-      return def.includes(title)
+    if (verbose) {
+      pushStatus(`Saved user message (chars=${t.length})`)
+      pushStatus(`Starting stream with model=${model}`)
     }
-    if (conv && isDefaultTitle(conv.title)) {
-      await supabase.from('conversations').update({ title: t.slice(0, 60) }).eq('id', cid)
+
+    // Update conversation title once for new chats
+    const conv = conversations.find(c => c.id === cid)
+    if (conv && (!conv.title || ['New chat','New Prompt','New','Untitled'].includes(conv.title))) {
+      await supabase.from('conversations').update({ title: t.slice(0,60) }).eq('id', cid)
       setConversations(cs => cs.map(c => c.id === cid ? { ...c, title: t.slice(0, 60) } : c))
     }
 
-    // Stream from backend; assemble minimal messages
-    const userMessages = [{ role: 'user', content: t }]
+    // Start streaming
     const tempId = crypto.randomUUID()
+    setIsStreaming(true)
     let accum = ''
     setMessages(m => [...m, { id: tempId, role: 'assistant', content: '', created_at: new Date().toISOString() }])
+
+    const controller = new AbortController()
+    abortRef.current = controller
     try {
       await streamCompletion({
         providerModel: model,
-        rulesetId,
-        messages: userMessages,
+        // no rulesetId; server defaults to enhancer-default
+        messages: [{ role: 'user', content: t }],
         onToken: (tok) => {
           accum += tok
           setMessages(m => m.map(x => x.id === tempId ? { ...x, content: accum } : x))
-        }
+          // autoscroll if close to bottom
+          const el = listRef.current
+          if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 140) {
+            el.scrollTo({ top: el.scrollHeight })
+          }
+        },
+        onStatus: verbose ? (msg) => pushStatus(msg) : undefined,
+        signal: controller.signal,
       })
     } catch (err) {
-      setMessages(m => m.map(x => x.id === tempId ? { ...x, content: '[Error streaming output]' } : x))
+      const msg = (err && (err.message || String(err))) || 'Error streaming'
+      setMessages(m => m.map(x => x.id === tempId ? { ...x, content: `[${msg}]` } : x))
+      if (verbose) pushStatus(`Stream error: ${msg}`)
+    } finally {
+      setIsStreaming(false)
+      abortRef.current = null
     }
 
-    // Persist final assistant message
-    if (accum) await supabase.from('messages').insert({ conversation_id: cid, role: 'assistant', content: accum })
-
+    if (accum) {
+      await supabase.from('messages').insert({ conversation_id: cid, role: 'assistant', content: accum })
+      if (verbose) pushStatus(`Saved assistant message (chars=${accum.length})`)
+    }
     setInput('')
-  }
+  }, [input, user, isStreaming, ensureConversation, model, conversations, verbose, pushStatus])
 
-  const copyText = async (id, text) => {
+  const onAbort = useCallback(() => {
+    try { abortRef.current?.abort() } catch {}
+    if (verbose) pushStatus('Abort requested')
+  }, [])
+
+  const copyText = useCallback(async (id, text) => {
     if (!text) return
     try {
       await navigator.clipboard.writeText(text)
-      setCopiedId(id)
-      setTimeout(() => setCopiedId(prev => (prev === id ? null : prev)), 1800)
-    } catch (err) {
-      console.error('Copy failed', err)
-      const ta = document.createElement('textarea')
-      ta.value = text
-      document.body.appendChild(ta)
-      ta.select()
-      try { document.execCommand('copy') } catch (e) { console.error(e) }
-      document.body.removeChild(ta)
-      setCopiedId(id)
-      setTimeout(() => setCopiedId(prev => (prev === id ? null : prev)), 1800)
-    }
-  }
-
-  const signOut = async () => { await supabase.auth.signOut(); window.location.href = '/' }
+      copiedRef.current = id
+      setTimeout(() => { if (copiedRef.current === id) copiedRef.current = null }, 1600)
+    } catch {}
+  }, [])
 
   return (
     <>
-      {/* Top bar (edge-to-edge) */}
+      {/* Top Bar */}
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand">Prompt Enhancer</div>
@@ -338,7 +194,7 @@ export default function Enhancer() {
             <input
               type="checkbox"
               checked={theme === 'dark'}
-              onChange={onToggleTheme}
+              onChange={(e) => toggle(e.target.checked ? 'dark' : 'light')}
               aria-label="Toggle dark mode"
             />
             <span className="slider" aria-hidden="true"></span>
@@ -348,7 +204,7 @@ export default function Enhancer() {
       </header>
 
       <div className="claude-app">
-        {/* RECREATED LEFT SIDEPANEL */}
+        {/* LEFT: History */}
         <aside className="sp-side">
           <div className="sp-header">
             <button className="sp-new" onClick={() => newConversation('New Prompt')}>
@@ -356,20 +212,14 @@ export default function Enhancer() {
             </button>
             <div className="sp-title">History</div>
           </div>
-
           <div className="sp-scroll">
             <ul className="sp-list">
               {conversations.map(c => (
                 <li key={c.id} className={`sp-item ${activeId === c.id ? 'is-active' : ''}`}>
-                  <button className="sp-item-title" onClick={() => setActiveId(c.id)}>
+                  <button className="sp-item-title" onClick={async () => { setActiveId(c.id); await loadMessages(c.id) }}>
                     {c.title || 'New chat'}
                   </button>
-                  <button
-                    className="sp-item-icon"
-                    title="Delete"
-                    aria-label="Delete conversation"
-                    onClick={(e)=>{ e.stopPropagation(); deleteConversation(c.id) }}
-                  >
+                  <button className="sp-item-icon" title="Delete" aria-label="Delete conversation" onClick={(e)=>{ e.stopPropagation(); deleteConversation(c.id) }}>
                     <Icon.trash className="sp-icon" />
                   </button>
                 </li>
@@ -377,7 +227,6 @@ export default function Enhancer() {
               {!conversations.length && <li className="sp-empty">No history yet</li>}
             </ul>
           </div>
-
           <div className="sp-footer">
             <div className="sp-user">{user?.user_metadata?.name || user?.email || 'Guest'}</div>
             <div className="sp-actions">
@@ -391,47 +240,55 @@ export default function Enhancer() {
           </div>
         </aside>
 
-        {/* MAIN */}
-        <main className="c-main" ref={mainRef}>
+        {/* RIGHT: Chat */}
+        <main className="c-main">
           <div className="c-messages" ref={listRef}>
             <div className="c-center">
               <h2 className="c-center-title">Enhance and pick what fits you</h2>
             </div>
             {messages.map(m => (
               <div key={m.id} className={`c-msg ${m.role}`}>
-                {m.role === 'assistant' ? (
-                  <div>
-                    <div className="c-assistant-text">{m.content}</div>
-                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
-                      <button
-                        className="copy-btn"
-                        onClick={() => copyText(m.id, m.content)}
-                        aria-label="Copy assistant output"
-                      >
-                        {copiedId === m.id ? 'Copied' : 'Copy'}
-                      </button>
+                {m.role === 'assistant'
+                  ? (
+                    <div>
+                      <div className="c-assistant-text">{m.content}</div>
+                      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+                        <button className="copy-btn" onClick={() => copyText(m.id, m.content)} aria-label="Copy assistant output">Copy</button>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="c-user-box">{m.content}</div>
-                )}
+                  )
+                  : (<div className="c-user-box">{m.content}</div>)
+                }
               </div>
             ))}
-            {/* anchor for auto-scroll */}
             <div ref={bottomRef} className="c-bottom-anchor" />
           </div>
 
-          {/* Bottom input dock (ChatGPT-style) */}
-          <div className="c-input-dock" role="region" aria-label="Prompt input">\n            <div className="rs-pick" style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 6 }}>\n              <label htmlFor="rs-select" style={{ alignSelf: 'center', opacity: .8 }}>Ruleset</label>\n              <select id="rs-select" className="c-ask-input" value={rulesetId} onChange={e => setRulesetId(e.target.value)} style={{ maxWidth: 320 }}>\n                {rulesets.length === 0 && <option value={rulesetId}>{rulesetId}</option>}\n                {rulesets.map(r => <option key={r} value={r}>{r}</option>)}\n              </select>\n            </div>
+          {/* Input dock */}
+          <div className="c-input-dock" role="region" aria-label="Prompt input">
+            <div className="c-status-controls" style={{ display: 'flex', justifyContent: 'center', gap: 12, margin: '4px 0' }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <input type="checkbox" checked={verbose} onChange={e => setVerbose(e.target.checked)} /> Verbose
+              </label>
+            </div>
+            {verbose && (
+              <div className="c-status" aria-live="polite" aria-label="Status log">
+                {statusLines.map((ln, i) => (
+                  <div key={i} className="c-status-line">{ln}</div>
+                ))}
+              </div>
+            )}
+            {/* Ruleset selector removed; default ruleset used server-side. */}
+
             <ProviderBar
               value={model}
               onChange={setModel}
               options={[
                 { key: 'deepseek/deepseek-chat-v3.1:free', label: 'DeepSeek v3.1' },
-                { key: 'openai/gpt-oss-120b:free', label: 'GPT‑OSS 120B' },
-                { key: 'qwen/qwen3-coder:free', label: 'Qwen3 Coder' }
+                { key: 'groq/llama-3.1-8b-instant', label: 'Groq Llama3.1 8B' }
               ]}
             />
+
             <div className="c-ask-wrap">
               <input
                 className="c-ask-input"
@@ -440,12 +297,16 @@ export default function Enhancer() {
                 onKeyDown={(e) => { if (e.key === 'Enter') onSend() }}
                 placeholder="Type a prompt and press Enter…"
                 aria-label="Enter prompt"
+                disabled={isStreaming}
               />
-              <button className="c-send" onClick={onSend} aria-label="Enhance">
+              <button className="c-send" onClick={onSend} disabled={isStreaming} aria-label="Enhance">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M3 11.5l17-8.5-7.5 18-1.5-7-8-2.5z" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinejoin="round"/>
                 </svg>
               </button>
+              {isStreaming && (
+                <button className="c-send" onClick={onAbort} title="Stop" aria-label="Stop streaming">⏹</button>
+              )}
             </div>
           </div>
         </main>
@@ -453,4 +314,3 @@ export default function Enhancer() {
     </>
   )
 }
-
